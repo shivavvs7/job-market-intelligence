@@ -1,0 +1,1 @@
+# Job Market Intelligence Platform Combines candidate/application data from the OPUS platform with a large real-world dataset of 120K+ LinkedIn job postings to analyze skill-market alignment and predict salaries. See docs/kaggle_data_dictionary.md for source data findings. Data source: LinkedIn Job Postings dataset (Kaggle, arshkon/linkedin-job-postings), licensed CC-BY-SA-4.0.

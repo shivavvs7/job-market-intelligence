@@ -1,0 +1,13 @@
+.venv/ 
+.env 
+kaggle.json 
+.kaggle/ 
+gcp-service-account.json 
+profiles.yml 
+__pycache__/ 
+*.pyc 
+logs/ 
+target/ 
+target_airflow/ 
+.user.yml 
+data/raw/
