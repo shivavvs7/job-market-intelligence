@@ -1,0 +1,78 @@
+# Airflow via Docker Compose, applying every lesson learned from the
+# OPUS project's setup directly (rather than rediscovering them):
+#   - DBT_TARGET_PATH kept separate from local runs to avoid the
+#     cross-environment partial-parse cache corruption found there.
+#   - PYTHONUNBUFFERED not needed here since we use BashOperator output
+#     directly rather than a custom Python entrypoint script.
+
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: Dockerfile.airflow
+  depends_on:
+    postgres:
+      condition: service_healthy
+  env_file:
+    - .env
+  environment:
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    PROJECT_DIR: /opt/airflow/project
+    DBT_PROFILES_DIR: /opt/airflow/project
+    DBT_TARGET_PATH: /opt/airflow/project/target_airflow
+    GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/project/gcp-service-account.json
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - airflow_logs:/opt/airflow/logs
+    - .:/opt/airflow/project
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate
+        airflow users create \
+          --username admin \
+          --password admin \
+          --firstname Shiva \
+          --lastname DataEngineer \
+          --role Admin \
+          --email admin@example.com || true
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8081:8080"
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+
+volumes:
+  postgres_data:
+  airflow_logs:

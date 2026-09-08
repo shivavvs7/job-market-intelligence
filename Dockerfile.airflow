@@ -1,0 +1,13 @@
+# Same pattern as the OPUS project's Airflow image, applying lessons
+# learned there directly: extends the official Airflow image with this
+# project's pipeline dependencies.
+FROM apache/airflow:2.10.5-python3.12
+
+USER root
+
+COPY requirements.txt /requirements.txt
+COPY requirements-dbt.txt /requirements-dbt.txt
+COPY requirements-ml.txt /requirements-ml.txt
+
+USER airflow
+RUN pip install --no-cache-dir -r /requirements.txt -r /requirements-dbt.txt -r /requirements-ml.txt
