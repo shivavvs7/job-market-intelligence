@@ -1,15 +1,25 @@
 """
 Job Market Intelligence - Stage 1: Ingest Kaggle CSVs -> GCS -> BigQuery
 --------------------------------------------------------------------------
-Uploads every CSV under data/raw/ to GCS, then loads each into BigQuery as
-a raw table (autodetected schema, since these are already structured CSVs
--- unlike the OPUS project's Mongo JSON, there's no ambiguity to defer here).
+Uploads every CSV under data/raw/ to GCS, then loads each into BigQuery.
+
+IMPORTANT design note: every column is loaded as STRING, with schema
+built explicitly from each file's real header (read locally first) --
+autodetect is NOT used. This was a deliberate fix after autodetect
+produced generic column names (string_field_0, string_field_1, ...) on
+files where every column happens to be text (e.g. skills.csv) -- with no
+type difference between the header and data rows, BigQuery's autodetect
+has no signal to tell them apart. Loading everything as STRING sidesteps
+that ambiguity entirely; all real typing (numbers, dates, booleans)
+happens explicitly in the dbt staging layer instead, where it's visible
+and reviewable rather than silently inferred.
 
 Usage:
     python scripts/ingest_kaggle_to_gcs_bigquery.py
 """
 
 import os
+import csv
 
 from dotenv import load_dotenv
 from google.cloud import storage
@@ -33,10 +43,17 @@ def find_csv_files(root):
         for fname in filenames:
             if fname.endswith(".csv"):
                 full_path = os.path.join(dirpath, fname)
-                # Table name = filename without extension (e.g. "postings", "job_skills")
                 table_name = os.path.splitext(fname)[0]
                 csv_files.append((table_name, full_path))
     return sorted(csv_files)
+
+
+def read_header(path):
+    """Read just the header row locally to build an explicit schema."""
+    with open(path, "r", encoding="utf-8", newline="") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+    return [col.strip() for col in header]
 
 
 def ensure_bucket(storage_client):
@@ -66,27 +83,31 @@ def upload_and_load(bucket, bq_client, table_name, local_path):
     blob_path = f"raw/{table_name}.csv"
 
     print(f"\n{table_name} ({size_mb:.1f} MB)")
-    print(f"  Uploading to gs://{BUCKET_NAME}/{blob_path} ...")
 
+    header = read_header(local_path)
+    print(f"  Columns (from real header): {header}")
+
+    print(f"  Uploading to gs://{BUCKET_NAME}/{blob_path} ...")
     blob = bucket.blob(blob_path)
     blob.upload_from_filename(local_path)
 
     table_id = f"{GCP_PROJECT_ID}.{DATASET_ID}.{table_name}"
     uri = f"gs://{BUCKET_NAME}/{blob_path}"
 
+    schema = [bigquery.SchemaField(col, "STRING") for col in header]
+
     job_config = bigquery.LoadJobConfig(
         source_format=bigquery.SourceFormat.CSV,
+        schema=schema,
         skip_leading_rows=1,
-        autodetect=True,
-        # Required: postings.csv has free-text fields (job descriptions)
-        # containing embedded newlines inside quoted values.
+        autodetect=False,
         allow_quoted_newlines=True,
         write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
     )
 
     print(f"  Loading into {table_id} ...")
     load_job = bq_client.load_table_from_uri(uri, table_id, job_config=job_config)
-    load_job.result()  # wait for completion, raises on failure
+    load_job.result()
 
     table = bq_client.get_table(table_id)
     print(f"  Done: {table.num_rows:,} rows loaded.")

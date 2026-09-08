@@ -1,0 +1,40 @@
+version: 2
+
+models:
+  - name: fact_job_postings
+    description: "Core fact table, one row per job posting. Salary uses salaries.csv as primary source (see salary_source column)."
+    columns:
+      - name: job_id
+        tests:
+          - unique
+          - not_null
+
+  - name: fact_job_skills
+    description: "Bridge table: many-to-many between jobs and broad skill categories."
+    columns:
+      - name: job_id
+        tests:
+          - not_null
+
+  - name: dim_company
+    description: "One row per company, with primary industry and latest employee count."
+    columns:
+      - name: company_id
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_skill_category
+    description: "35 broad skill categories (not granular skills - see Stage 0 findings)."
+    columns:
+      - name: skill_abr
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_industry
+    columns:
+      - name: industry_id
+        tests:
+          - unique
+          - not_null

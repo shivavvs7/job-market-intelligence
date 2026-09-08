@@ -1,0 +1,22 @@
+version: 2
+
+sources:
+  - name: raw_market
+    database: "{{ env_var('GCP_PROJECT_ID') }}"
+    schema: raw_market
+    description: >
+      Raw LinkedIn job postings dataset (Kaggle: arshkon/linkedin-job-postings,
+      CC-BY-SA-4.0), loaded as-is via Stage 1 ingestion. See
+      docs/kaggle_data_dictionary.md for confirmed data quality findings.
+    tables:
+      - name: postings
+      - name: companies
+      - name: company_industries
+      - name: company_specialities
+      - name: employee_counts
+      - name: benefits
+      - name: job_industries
+      - name: job_skills
+      - name: salaries
+      - name: industries
+      - name: skills
