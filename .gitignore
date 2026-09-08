@@ -11,3 +11,4 @@ target/
 target_airflow/ 
 .user.yml 
 data/raw/
+models_ml/
